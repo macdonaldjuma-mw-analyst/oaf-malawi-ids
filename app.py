@@ -78,7 +78,7 @@ def generate_kobo_csv(raw_data):
     ).fillna(0)
     
     # Convert quantities to 1/0 for easy Kobo checkboxes
-    kobo_pivot = kobo_pivot.applymap(lambda x: 1 if x > 0 else 0)
+    kobo_pivot = kobo_pivot.map(lambda x: 1 if x > 0 else 0)
     
     # Flatten index so it's a clean CSV
     kobo_csv = kobo_pivot.reset_index()

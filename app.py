@@ -7,10 +7,90 @@ class IDS_PDF(FPDF):
     def header(self):
         # We will handle custom headers per group in the main loop
         pass
+def generate_tms_page(pdf, raw_data, site, district, date, tms_no):
+    pdf.add_page()
+    
+    # Header Section
+    pdf.set_font("Helvetica", 'B', 16)
+    pdf.cell(0, 10, "TRUCK MANAGEMENT SHEET (TMS)", ln=True, align='C')
+    pdf.set_font("Helvetica", '', 10)
+    
+    # Metadata Grid
+    pdf.ln(5)
+    col_w = 45
+    pdf.cell(col_w, 7, f"District: {district}", border='B')
+    pdf.cell(col_w, 7, f"Site: {site}", border='B')
+    pdf.cell(col_w, 7, f"TMS No: {tms_no}", border='B')
+    pdf.cell(col_w, 7, f"Date: {date}", border='B', ln=True)
+    
+    # 1. Summary Table (Pivot all data for the site)
+    pdf.ln(10)
+    pdf.set_font("Helvetica", 'B', 10)
+    pdf.set_fill_color(230, 230, 230)
+    
+    # Table Headers
+    pdf.cell(80, 10, "Input Name", border=1, fill=True)
+    pdf.cell(30, 10, "# Needed", border=1, fill=True, align='C')
+    pdf.cell(30, 10, "# Loaded", border=1, fill=True, align='C')
+    pdf.cell(30, 10, "# Unloaded", border=1, fill=True, align='C')
+    pdf.cell(30, 10, "# Returned", border=1, fill=True, align='C')
+    pdf.cell(60, 10, "Notes", border=1, fill=True, ln=True)
+    
+    # Pivot for totals
+    summary = raw_data.groupby('SHORTNAME')['QUANTITY'].sum().reset_index()
+    
+    pdf.set_font("Helvetica", '', 10)
+    for _, row in summary.iterrows():
+        pdf.cell(80, 8, str(row['SHORTNAME']), border=1)
+        pdf.cell(30, 8, str(int(row['QUANTITY'])), border=1, align='C') # Needed
+        pdf.cell(30, 8, "", border=1) # Loaded (Blank for manual entry)
+        pdf.cell(30, 8, "", border=1) # Unloaded (Blank)
+        pdf.cell(30, 8, "", border=1) # Returned (Blank)
+        pdf.cell(60, 8, "", border=1, ln=True)
+        
+    # 2. Sign-off Matrix (Warehouse Loading vs Returns)
+    pdf.ln(15)
+    pdf.set_font("Helvetica", 'B', 10)
+    
+    # Headers for sign-off
+    y_sign = pdf.get_y()
+    pdf.text(10, y_sign, "WAREHOUSE LOADING (Dispatch)")
+    pdf.text(150, y_sign, "WAREHOUSE RETURNS (Reconciliation)")
+    
+    pdf.ln(5)
+    # Loading Slots
+    pdf.set_font("Helvetica", '', 9)
+    pdf.cell(70, 10, "WM Sign: ____________________", border=1)
+    pdf.set_x(150)
+    pdf.cell(70, 10, "WM Sign: ____________________", border=1, ln=True)
+    
+    pdf.cell(70, 10, "Security Sign: ________________", border=1)
+    pdf.set_x(150)
+    pdf.cell(70, 10, "Security Sign: ________________", border=1, ln=True)
+
+def generate_kobo_csv(raw_data):
+    # Pivot the data so each farmer is one row with all their products
+    kobo_pivot = raw_data.pivot_table(
+        index=['GROUP', 'ACCOUNT', 'CLIENT'], 
+        columns='SHORTNAME', 
+        values='QUANTITY', 
+        aggfunc='sum'
+    ).fillna(0)
+    
+    # Convert quantities to 1/0 for easy Kobo checkboxes
+    kobo_pivot = kobo_pivot.applymap(lambda x: 1 if x > 0 else 0)
+    
+    # Flatten index so it's a clean CSV
+    kobo_csv = kobo_pivot.reset_index()
+    
+    # Convert to CSV string
+    return kobo_csv.to_csv(index=False)
 
 def generate_pdf(raw_data, selected_site, selected_district, del_date, del_tms):
     pdf = IDS_PDF(orientation='L', unit='mm', format='A4')
     pdf.set_auto_page_break(auto=True, margin=15)
+
+    generate_tms_page(pdf, raw_data, selected_site, selected_district, del_date, del_tms)
     
     # 1. Page Settings & Map
     acc_w, name_w, prod_w, sig_w = 22, 48, 12, 35
@@ -226,17 +306,35 @@ if selected_district:
                     final_ids = pd.DataFrame(final_rows)
                     st.dataframe(final_ids, use_container_width=True)
 
-            # 5. Final Download Button
+            # 5. Final Download Section
             st.divider()
-            if st.button(f"Download IDS PDF"):
-                # Pass the new date and TMS variables from your sidebar here:
+            if st.button("Process Delivery Documents"):
+                # 1. Run the PDF generator (The 'Worker' that adds TMS + IDS pages)
                 pdf_bytes = generate_pdf(raw_data, selected_site, selected_district, delivery_date, delivery_tms)
-                st.download_button(
-                    label="Click here to save PDF",
-                    data=pdf_bytes,
-                    file_name=f"IDS_{selected_site}.pdf",
-                    mime="application/pdf"
-                )
+                
+                # 2. Run the Kobo CSV generator
+                csv_data = generate_kobo_csv(raw_data)
+                
+                st.success("Documents generated successfully!")
+                
+                # 3. Create two columns for the download buttons
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.download_button(
+                        label="📄 Download IDS Bundle (PDF)",
+                        data=pdf_bytes,
+                        file_name=f"TMS_{delivery_tms}_{selected_site}_IDS.pdf",
+                        mime="application/pdf"
+                    )
+                
+                with col2:
+                    st.download_button(
+                        label="📊 Download Kobo Media (CSV)",
+                        data=csv_data,
+                        file_name=f"kobo_prefill_{selected_site}.csv",
+                        mime="text/csv"
+                    )
         else:
             st.warning(f"No undelivered orders for Group: {selected_group}")
 else:

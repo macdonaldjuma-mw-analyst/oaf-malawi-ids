@@ -10,63 +10,66 @@ class IDS_PDF(FPDF):
 def generate_tms_page(pdf, raw_data, site, district, date, tms_no):
     pdf.add_page()
     
-    # Header Section
-    pdf.set_font("Helvetica", 'B', 16)
-    pdf.cell(0, 10, "TRUCK MANAGEMENT SHEET (TMS)", ln=True, align='C')
-    pdf.set_font("Helvetica", '', 10)
+    # 1. TOP SIGN-OFF GRID (The "Nuances")
+    pdf.set_font("Helvetica", 'B', 8)
     
-    # Metadata Grid
-    pdf.ln(5)
-    col_w = 45
-    pdf.cell(col_w, 7, f"District: {district}", border='B')
-    pdf.cell(col_w, 7, f"Site: {site}", border='B')
-    pdf.cell(col_w, 7, f"TMS No: {tms_no}", border='B')
-    pdf.cell(col_w, 7, f"Date: {date}", border='B', ln=True)
+    # Row 1: Warehouse Loading Section
+    pdf.set_xy(10, 10)
+    pdf.cell(40, 12, "District: " + str(district), border=1)
+    pdf.cell(40, 12, "TMS No: " + str(tms_no), border=1)
+    pdf.set_fill_color(220, 220, 220)
+    pdf.cell(40, 6, "Warehouse Loading", border=1, fill=True, align='C')
+    pdf.set_xy(90, 16) # Move below "Warehouse Loading"
+    pdf.cell(20, 6, "TM Sign", border=1)
+    pdf.cell(20, 6, "LA Sign", border=1)
+    pdf.cell(20, 6, "WA Sign", border=1)
     
-    # 1. Summary Table (Pivot all data for the site)
-    pdf.ln(10)
-    pdf.set_font("Helvetica", 'B', 10)
-    pdf.set_fill_color(230, 230, 230)
+    # Row 2: Warehouse Returns Section
+    pdf.set_xy(150, 10)
+    pdf.cell(100, 6, "Warehouse Returns / Reconciliation", border=1, fill=True, align='C', ln=True)
+    pdf.set_x(150)
+    pdf.cell(25, 6, "Truck Arrival", border=1)
+    pdf.cell(25, 6, "Truck Depart", border=1)
+    pdf.cell(25, 6, "TM Sign", border=1)
+    pdf.cell(25, 6, "FO Sign", border=1)
+    pdf.cell(25, 6, "FM Sign", border=1, ln=True)
+
+    # 2. ADDITIONAL ROLES (FM, WA)
+    pdf.set_xy(10, 22)
+    pdf.cell(40, 10, "Truck Plate: ________", border=1)
+    pdf.cell(40, 10, "Warehouse: ________", border=1)
+    pdf.cell(20, 10, "FM Sign", border=1)
+    pdf.cell(20, 10, "WA Sign", border=1)
     
-    # Table Headers
-    pdf.cell(80, 10, "Input Name", border=1, fill=True)
-    pdf.cell(30, 10, "# Needed", border=1, fill=True, align='C')
-    pdf.cell(30, 10, "# Loaded", border=1, fill=True, align='C')
-    pdf.cell(30, 10, "# Unloaded", border=1, fill=True, align='C')
-    pdf.cell(30, 10, "# Returned", border=1, fill=True, align='C')
-    pdf.cell(60, 10, "Notes", border=1, fill=True, ln=True)
-    
-    # Pivot for totals
+    # 3. DYNAMIC TABLE SCALING
     summary = raw_data.groupby('SHORTNAME')['QUANTITY'].sum().reset_index()
+    num_rows = len(summary)
     
-    pdf.set_font("Helvetica", '', 10)
-    for _, row in summary.iterrows():
-        pdf.cell(80, 8, str(row['SHORTNAME']), border=1)
-        pdf.cell(30, 8, str(int(row['QUANTITY'])), border=1, align='C') # Needed
-        pdf.cell(30, 8, "", border=1) # Loaded (Blank for manual entry)
-        pdf.cell(30, 8, "", border=1) # Unloaded (Blank)
-        pdf.cell(30, 8, "", border=1) # Returned (Blank)
-        pdf.cell(60, 8, "", border=1, ln=True)
-        
-    # 2. Sign-off Matrix (Warehouse Loading vs Returns)
-    pdf.ln(15)
-    pdf.set_font("Helvetica", 'B', 10)
+    # If there are many rows, shrink the row height to keep it on one page
+    tms_row_height = 8
+    if num_rows > 20: tms_row_height = 6
+    if num_rows > 30: tms_row_height = 5
     
-    # Headers for sign-off
-    y_sign = pdf.get_y()
-    pdf.text(10, y_sign, "WAREHOUSE LOADING (Dispatch)")
-    pdf.text(150, y_sign, "WAREHOUSE RETURNS (Reconciliation)")
+    pdf.set_xy(10, 35)
+    pdf.set_font("Helvetica", 'B', 9)
+    pdf.set_fill_color(240, 240, 240)
     
-    pdf.ln(5)
-    # Loading Slots
+    # Headers matching the original Mulombozi design
+    pdf.cell(80, 10, "Input Name", border=1, fill=True)
+    pdf.cell(25, 10, "# Needed", border=1, fill=True, align='C')
+    pdf.cell(25, 10, "# Loaded", border=1, fill=True, align='C')
+    pdf.cell(25, 10, "# Unloaded", border=1, fill=True, align='C')
+    pdf.cell(25, 10, "# Returned", border=1, fill=True, align='C')
+    pdf.cell(70, 10, "Notes", border=1, fill=True, ln=True)
+    
     pdf.set_font("Helvetica", '', 9)
-    pdf.cell(70, 10, "WM Sign: ____________________", border=1)
-    pdf.set_x(150)
-    pdf.cell(70, 10, "WM Sign: ____________________", border=1, ln=True)
-    
-    pdf.cell(70, 10, "Security Sign: ________________", border=1)
-    pdf.set_x(150)
-    pdf.cell(70, 10, "Security Sign: ________________", border=1, ln=True)
+    for _, row in summary.iterrows():
+        pdf.cell(80, tms_row_height, str(row['SHORTNAME']), border=1)
+        pdf.cell(25, tms_row_height, str(int(row['QUANTITY'])), border=1, align='C')
+        pdf.cell(25, tms_row_height, "", border=1) # Loaded
+        pdf.cell(25, tms_row_height, "", border=1) # Unloaded
+        pdf.cell(25, tms_row_height, "", border=1) # Returned
+        pdf.cell(70, tms_row_height, "", border=1, ln=True)
 
 def generate_kobo_csv(raw_data):
     # Pivot the data so each farmer is one row with all their products

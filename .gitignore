@@ -1,0 +1,15 @@
+# Ignore Streamlit secrets (Where your password is)
+.streamlit/
+
+# Ignore Python cache (Makes the repo messy)
+__pycache__/
+*.py[cod]
+
+# Ignore any local data files
+*.csv
+*.xlsx
+
+# Ignore virtual environments
+venv/
+.venv/
+env/

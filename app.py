@@ -8,120 +8,99 @@ class IDS_PDF(FPDF):
         # We will handle custom headers per group in the main loop
         pass
 
-def generate_pdf(raw_data, selected_site, selected_district):
-    # Initialize PDF in Landscape
+def generate_pdf(raw_data, selected_site, selected_district, del_date, del_tms):
     pdf = IDS_PDF(orientation='L', unit='mm', format='A4')
     pdf.set_auto_page_break(auto=True, margin=15)
     
-    # 1. Define Fixed Column Widths (mm)
-    acc_w = 22
-    name_w = 48
-    prod_w = 12
-    sig_w = 35
-    
-    # Fixed X-Coordinate Map to prevent "text shifting"
-    col_map = {
-        'acc': 10,
-        'name': 10 + acc_w,
-        'prod_start': 10 + acc_w + name_w
-    }
+    # 1. Page Settings & Map
+    acc_w, name_w, prod_w, sig_w = 22, 48, 12, 35
+    col_map = {'acc': 10, 'name': 32, 'prod_start': 80}
 
-    unique_groups = raw_data['GROUP'].unique()
-    
-    for group in unique_groups:
+    for group in raw_data['GROUP'].unique():
         pdf.add_page()
         group_df = raw_data[raw_data['GROUP'] == group]
-        
-        # --- LOGO & HEADER ---
-        try:
-            pdf.image("oaf_logo.png", x=262, y=8, w=25)
-        except:
-            pass # Skips if logo is not in GitHub repo
-            
-        pdf.set_font("Helvetica", 'B', 14)
-        pdf.set_xy(40, 12)
-        pdf.cell(0, 10, f"Main_ID_SR: {selected_site} - Group {group}", ln=True)
-        
-        pdf.set_font("Helvetica", '', 9)
-        pdf.set_x(40)
-        pdf.cell(0, 5, f"District: {selected_district} | Site: {selected_site} | Date: {pd.Timestamp.now().strftime('%d %b %Y')}", ln=True)
-        
-        # --- TABLE HEADER ---
-        pdf.set_y(32)
-        pdf.set_font("Helvetica", 'B', 8)
-        
-        # Get products for this specific group
         pivot = group_df.pivot_table(index=['ACCOUNT', 'CLIENT'], columns='SHORTNAME', values='QUANTITY', aggfunc='sum').fillna(0)
         products = list(pivot.columns)
-        
-        # Draw static headers
-        pdf.set_xy(col_map['acc'], 32)
-        pdf.cell(acc_w, 20, "Account", border=1, align='C')
-        pdf.cell(name_w, 20, "Farmer Name", border=1, align='C')
-        
-        # --- ROTATED HEADERS ---
-        for i, prod in enumerate(products):
-            # Calculate the exact left edge of this specific column
-            x_pos = col_map['prod_start'] + (i * prod_w)
+
+        # --- DYNAMIC HEADER HEIGHT ---
+        # Find the longest name length. 
+        # Every 1 char is ~2mm. Minimum height 20mm.
+        max_name_len = max([len(str(p)) for p in products]) if products else 10
+        h_height = max(20, (max_name_len * 2) + 5) 
+
+        # --- DOCUMENT HEADER ---
+        try: pdf.image("oaf_logo.png", x=262, y=8, w=25)
+        except: pass
             
-            # 1. Draw the Box
-            pdf.rect(x_pos, 32, prod_w, 20)
+        pdf.set_font("Helvetica", 'B', 11)
+        pdf.text(10, 12, f"Delivery: {selected_site} {group}")
+        pdf.set_font("Helvetica", '', 9)
+        pdf.text(10, 17, f"{selected_site}, {selected_district}")
+        pdf.text(10, 22, f"Print Date: {pd.Timestamp.now().strftime('%d %b %Y')}")
         
-            # 2. Draw the Text (The Pivot must be at x_pos + half the width)
-            # We use x_pos + 6 (half of 12) to put the text in the dead center
-            with pdf.rotation(90, x=x_pos + 6, y=42):
-                pdf.text(x_pos + 2, 50, prod[:15])
+        # New User-Inputted Fields
+        pdf.text(70, 17, f"Delivery Date: {del_date}")
+        pdf.text(70, 22, f"Delivery TMS: {del_tms}")
         
-        # Draw Signature Header (End of products)
+        # --- TABLE HEADER (The Fix) ---
+        pdf.set_y(28) # Start table exactly here
+        pdf.set_font("Helvetica", 'B', 8)
+        
+        # Static Headers
+        pdf.set_xy(col_map['acc'], 28)
+        pdf.cell(acc_w, h_height, "Account", border=1, align='C')
+        pdf.cell(name_w, h_height, "Farmer Name", border=1, align='C')
+        
+        # THE FIX: Product Headers
+        for i, prod in enumerate(products):
+            x_pos = col_map['prod_start'] + (i * prod_w)
+            pdf.rect(x_pos, 28, prod_w, h_height)
+            
+            # Rotation Pivot: 
+            # We move y to (28 + h_height - 3) to start text 3mm from bottom line
+            with pdf.rotation(90, x=x_pos + (prod_w/2), y=28 + h_height - 3):
+                pdf.text(x_pos + 4, 28 + h_height - 2, str(prod))
+        
+        # Signature Header
         sig_x = col_map['prod_start'] + (len(products) * prod_w)
-        pdf.set_xy(sig_x, 32)
-        pdf.cell(sig_w, 20, "Farmer Signature", border=1, align='C')
-        
-        pdf.ln(20) # Move cursor below header block
+        pdf.set_xy(sig_x, 28)
+        pdf.cell(sig_w, h_height, "Farmer Signature", border=1, align='C')
+        pdf.ln(h_height)
 
         # --- DATA ROWS ---
         pdf.set_font("Helvetica", '', 8)
-        
         for idx, row in pivot.iterrows():
-            # Page Break Check: Each farmer needs 13mm (7+6). If less than 20mm remains, start new page.
-            if pdf.get_y() > 180:
-                pdf.add_page()
-                pdf.set_y(30) # Reset Y after header on new page (Simplified for now)
-
-            y_start = pdf.get_y()
+            if pdf.get_y() > 185: pdf.add_page()
+            y_s = pdf.get_y()
             
-            # Row 1: Farmer Data
-            pdf.set_xy(col_map['acc'], y_start)
+            # Left side
+            pdf.set_xy(col_map['acc'], y_s)
             pdf.cell(acc_w, 7, str(idx[0]), border='LR')
             pdf.cell(name_w, 7, str(idx[1]), border='LR')
             
-            for i, prod in enumerate(products):
-                pdf.set_xy(col_map['prod_start'] + (i * prod_w), y_start)
-                val = '1' if row[prod] > 0 else ''
+            # Product 1s (Locked to X)
+            for i, p in enumerate(products):
+                pdf.set_xy(col_map['prod_start'] + (i * prod_w), y_s)
+                val = '1' if row[p] > 0 else ''
                 pdf.cell(prod_w, 7, val, border=1, align='C')
             
-            # Signature Box: Drawn once for both rows (7mm + 6mm = 13mm)
-            pdf.set_xy(sig_x, y_start)
-            pdf.cell(sig_w, 13, "", border=1) 
+            # Merged Sig Box
+            pdf.set_xy(sig_x, y_s)
+            pdf.cell(sig_w, 13, "", border=1)
             
-            # Row 2: Adjustment Row (Stripe)
-            y_adj = y_start + 7
-            pdf.set_xy(col_map['acc'], y_adj)
+            # Adjustment
+            pdf.set_xy(col_map['acc'], y_s + 7)
             pdf.set_fill_color(245, 245, 245)
             pdf.set_text_color(120, 120, 120)
-            
             pdf.cell(acc_w, 6, "", border='LRB', fill=True)
             pdf.cell(name_w, 6, "  + Adjustment", border='LRB', fill=True)
-            
             for i in range(len(products)):
-                pdf.set_xy(col_map['prod_start'] + (i * prod_w), y_adj)
+                pdf.set_xy(col_map['prod_start'] + (i * prod_w), y_s + 7)
                 pdf.cell(prod_w, 6, "", border=1, fill=True)
             
-            # Reset for next farmer
             pdf.set_text_color(0, 0, 0)
-            pdf.set_xy(col_map['acc'], y_start + 13)
+            pdf.set_xy(col_map['acc'], y_s + 13)
 
-    # --- FINAL OUTPUT ---
     return bytes(pdf.output())
 
 # 1. Establish Snowflake Connection
@@ -131,6 +110,8 @@ st.title("OAF Malawi: IDS Generator")
 
 # 2. Sidebar Filters (Cascading Logic)
 st.sidebar.header("Delivery Filters")
+delivery_date = st.sidebar.date_input("Select Delivery Date")
+delivery_tms = st.sidebar.text_input("Enter Delivery TMS", value="TMS-001")
 
 # Helper function to get unique values for filters
 @st.cache_data

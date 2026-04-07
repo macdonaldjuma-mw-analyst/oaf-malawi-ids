@@ -96,7 +96,7 @@ def generate_pdf(raw_data, selected_site, selected_district, del_date, del_tms):
     generate_tms_page(pdf, raw_data, selected_site, selected_district, del_date, del_tms)
     
     # 1. Page Settings & Map
-    acc_w, name_w, prod_w, sig_w = 22, 48, 12, 35
+    acc_w, name_w, base_prod_w, sig_w = 22, 48, 12, 35
     col_map = {'acc': 10, 'name': 32, 'prod_start': 80}
 
     for group in raw_data['GROUP'].unique():
@@ -104,10 +104,18 @@ def generate_pdf(raw_data, selected_site, selected_district, del_date, del_tms):
         group_df = raw_data[raw_data['GROUP'] == group]
         pivot = group_df.pivot_table(index=['ACCOUNT', 'CLIENT'], columns='SHORTNAME', values='QUANTITY', aggfunc='sum').fillna(0)
         products = list(pivot.columns)
+        num_prods = len(products)
+
+        # --- DYNAMIC SCALING LOGIC ---
+        # If products > 12, shrink width to 9. If > 16, shrink to 7.
+        current_prod_w = base_prod_w
+        if num_prods > 12: current_prod_w = 9
+        if num_prods > 16: current_prod_w = 7
+        
+        # Recalculate where the Signature box starts so it doesn't fall off
+        sig_x = col_map['prod_start'] + (num_prods * current_prod_w)
 
         # --- DYNAMIC HEADER HEIGHT ---
-        # Find the longest name length. 
-        # Every 1 char is ~2mm. Minimum height 20mm.
         max_name_len = max([len(str(p)) for p in products]) if products else 10
         h_height = max(20, (max_name_len * 2) + 5) 
 
@@ -121,31 +129,26 @@ def generate_pdf(raw_data, selected_site, selected_district, del_date, del_tms):
         pdf.text(10, 17, f"{selected_site}, {selected_district}")
         pdf.text(10, 22, f"Print Date: {pd.Timestamp.now().strftime('%d %b %Y')}")
         
-        # New User-Inputted Fields
         pdf.text(70, 17, f"Delivery Date: {del_date}")
         pdf.text(70, 22, f"Delivery TMS: {del_tms}")
         
-        # --- TABLE HEADER (The Fix) ---
-        pdf.set_y(28) # Start table exactly here
-        pdf.set_font("Helvetica", 'B', 8)
+        # --- TABLE HEADER ---
+        pdf.set_y(28)
+        pdf.set_font("Helvetica", 'B', 8 if num_prods <= 12 else 7)
         
-        # Static Headers
         pdf.set_xy(col_map['acc'], 28)
         pdf.cell(acc_w, h_height, "Account", border=1, align='C')
         pdf.cell(name_w, h_height, "Farmer Name", border=1, align='C')
         
-        # THE FIX: Product Headers
+        # Product Headers using current_prod_w
         for i, prod in enumerate(products):
-            x_pos = col_map['prod_start'] + (i * prod_w)
-            pdf.rect(x_pos, 28, prod_w, h_height)
+            x_pos = col_map['prod_start'] + (i * current_prod_w)
+            pdf.rect(x_pos, 28, current_prod_w, h_height)
             
-            # Rotation Pivot: 
-            # We move y to (28 + h_height - 3) to start text 3mm from bottom line
-            with pdf.rotation(90, x=x_pos + (prod_w/2), y=28 + h_height - 3):
-                pdf.text(x_pos + 4, 28 + h_height - 2, str(prod))
+            with pdf.rotation(90, x=x_pos + (current_prod_w/2), y=28 + h_height - 3):
+                pdf.text(x_pos + (current_prod_w/4), 28 + h_height - 2, str(prod))
         
-        # Signature Header
-        sig_x = col_map['prod_start'] + (len(products) * prod_w)
+        # Signature Header using sig_x
         pdf.set_xy(sig_x, 28)
         pdf.cell(sig_w, h_height, "Farmer Signature", border=1, align='C')
         pdf.ln(h_height)
@@ -156,70 +159,61 @@ def generate_pdf(raw_data, selected_site, selected_district, del_date, del_tms):
             if pdf.get_y() > 185: pdf.add_page()
             y_s = pdf.get_y()
             
-            # Left side
             pdf.set_xy(col_map['acc'], y_s)
             pdf.cell(acc_w, 7, str(idx[0]), border='LR')
             pdf.cell(name_w, 7, str(idx[1]), border='LR')
             
-            # Product 1s (Locked to X)
+            # Product 1s using current_prod_w
             for i, p in enumerate(products):
-                pdf.set_xy(col_map['prod_start'] + (i * prod_w), y_s)
+                pdf.set_xy(col_map['prod_start'] + (i * current_prod_w), y_s)
                 val = '1' if row[p] > 0 else ''
-                pdf.cell(prod_w, 7, val, border=1, align='C')
+                pdf.cell(current_prod_w, 7, val, border=1, align='C')
             
-            # Merged Sig Box
+            # Merged Sig Box using sig_x
             pdf.set_xy(sig_x, y_s)
             pdf.cell(sig_w, 13, "", border=1)
             
-            # Adjustment
+            # Adjustment Row using current_prod_w
             pdf.set_xy(col_map['acc'], y_s + 7)
             pdf.set_fill_color(245, 245, 245)
             pdf.set_text_color(120, 120, 120)
             pdf.cell(acc_w, 6, "", border='LRB', fill=True)
             pdf.cell(name_w, 6, "  + Adjustment", border='LRB', fill=True)
-            for i in range(len(products)):
-                pdf.set_xy(col_map['prod_start'] + (i * prod_w), y_s + 7)
-                pdf.cell(prod_w, 6, "", border=1, fill=True)
+            for i in range(num_prods):
+                pdf.set_xy(col_map['prod_start'] + (i * current_prod_w), y_s + 7)
+                pdf.cell(current_prod_w, 6, "", border=1, fill=True)
             
             pdf.set_text_color(0, 0, 0)
             pdf.set_xy(col_map['acc'], y_s + 13)
 
         # --- 1. GRAND TOTAL ROW ---
-        pdf.set_fill_color(200, 200, 200) # Darker grey
+        pdf.set_fill_color(200, 200, 200)
         pdf.set_font("Helvetica", 'B', 8)
         pdf.cell(acc_w + name_w, 8, "GROUP TOTALS", border=1, fill=True, align='R')
         
         for prod in products:
-            total_qty = (pivot[prod] > 0).sum() # Counts how many '1s' are in the column
-            pdf.cell(prod_w, 8, str(int(total_qty)), border=1, fill=True, align='C')
+            total_qty = (pivot[prod] > 0).sum()
+            pdf.cell(current_prod_w, 8, str(int(total_qty)), border=1, fill=True, align='C')
         
         pdf.cell(sig_w, 8, "", border=1, fill=True)
-        # --- ADDED: NEW TOTAL / ADJUSTMENT ROW ---
-        pdf.ln(8) # Move cursor to the next line (matching the height of the previous row)
-        pdf.set_xy(col_map['acc'], pdf.get_y()) # Reset to left margin
         
-        # Label for the adjustment row
-        pdf.set_font("Helvetica", 'B', 8)
+        # --- NEW TOTAL / ADJUSTMENT ROW ---
+        pdf.ln(8)
+        pdf.set_xy(col_map['acc'], pdf.get_y())
         pdf.cell(acc_w + name_w, 8, "NEW TOTAL (After Adj.)", border=1, align='R')
         
-        # Create blank white boxes for the FO to write in
         for prod in products:
-            pdf.cell(prod_w, 8, "", border=1, align='C')
+            pdf.cell(current_prod_w, 8, "", border=1, align='C')
             
-        # Blank box under the signature column
         pdf.cell(sig_w, 8, "", border=1)
-                       
+                        
         pdf.ln(15)
         
         # --- 2. OFFICIAL SIGNATURE SLOTS ---
         pdf.set_font("Helvetica", 'B', 10)
-        # Group Leader Slot
         pdf.cell(90, 10, "Group Leader Signature: ________________________", ln=0)
         pdf.cell(40, 10, "Date: ____/____/____", ln=1)
-        
         pdf.ln(2)
-        
-        # Field Officer Slot
         pdf.cell(90, 10, "Field Officer Signature: ________________________", ln=0)
         pdf.cell(40, 10, "Date: ____/____/____", ln=1)
 

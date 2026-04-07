@@ -1,10 +1,73 @@
 import streamlit as st
 import pandas as pd
+from fpdf import FPDF
+import io
+
+class IDS_PDF(FPDF):
+    def header(self):
+        # We will handle custom headers per group in the main loop
+        pass
+
+def generate_pdf(raw_data, selected_site, selected_district):
+    pdf = IDS_PDF(orientation='L', unit='mm', format='A4')
+    pdf.set_auto_page_break(auto=True, margin=15)
+    
+    unique_groups = raw_data['GROUP'].unique()
+    
+    for group in unique_groups:
+        pdf.add_page()
+        group_df = raw_data[raw_data['GROUP'] == group]
+        
+        # --- HEADER SECTION ---
+        pdf.set_font("Helvetica", 'B', 12)
+        pdf.cell(0, 8, f"Delivery: {selected_site} {group}", ln=True)
+        pdf.set_font("Helvetica", '', 10)
+        pdf.cell(0, 6, f"{selected_site}, {selected_district}", ln=True)
+        pdf.cell(0, 6, f"Delivery Date: ________________", ln=True)
+        pdf.ln(5)
+        
+        # --- DATA TABLE ---
+        # Get dynamic products for this group
+        pivot = group_df.pivot_table(index=['ACCOUNT', 'CLIENT'], columns='SHORTNAME', values='QUANTITY', aggfunc='sum').fillna(0)
+        columns = list(pivot.columns)
+        
+        # Table Header
+        pdf.set_font("Helvetica", 'B', 7)
+        pdf.cell(20, 10, "Account Number", border=1)
+        pdf.cell(45, 10, "Farmer Name", border=1)
+        for col in columns:
+            pdf.cell(15, 10, col[:8], border=1) # Truncate long names
+        pdf.cell(35, 10, "Farmer Signature", border=1)
+        pdf.ln()
+        
+        # Table Rows
+        pdf.set_font("Arial", '', 7)
+        for idx, row in pivot.iterrows():
+            # Data Row
+            pdf.cell(20, 8, str(idx[0]), border=1)
+            pdf.cell(45, 8, str(idx[1]), border=1)
+            for col in columns:
+                val = '1' if row[col] > 0 else ''
+                pdf.cell(15, 8, val, border=1, align='C')
+            pdf.cell(35, 8, "", border=1)
+            pdf.ln()
+            
+            # Adjustment Row
+            pdf.set_text_color(150, 150, 150) # Grey color
+            pdf.cell(20, 6, "", border=1)
+            pdf.cell(45, 6, "  Delivery Adjustment", border=1)
+            for col in columns:
+                pdf.cell(15, 6, "", border=1)
+            pdf.cell(35, 6, "", border=1)
+            pdf.ln()
+            pdf.set_text_color(0, 0, 0) # Reset to black
+
+    return pdf.output()
 
 # 1. Establish Snowflake Connection
 conn = st.connection("snowflake")
 
-st.title("🇲🇼 OAF Malawi: IDS Generator")
+st.title("OAF Malawi: IDS Generator")
 
 # 2. Sidebar Filters (Cascading Logic)
 st.sidebar.header("Delivery Filters")
@@ -85,8 +148,14 @@ if selected_district:
 
             # 5. Final Download Button
             st.divider()
-            if st.button(f"Generate IDS PDF for {selected_site} ({selected_group})"):
-                st.info("Creating a multi-page PDF where every group starts on a new page...")
+            if st.button(f"Download IDS PDF"):
+                pdf_bytes = generate_pdf(raw_data, selected_site, selected_district)
+                st.download_button(
+                    label="Click here to save PDF",
+                    data=pdf_bytes,
+                    file_name=f"IDS_{selected_site}.pdf",
+                    mime="application/pdf"
+                )
         else:
             st.warning(f"No undelivered orders for Group: {selected_group}")
 else:

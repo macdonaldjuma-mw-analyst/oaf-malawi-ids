@@ -9,7 +9,6 @@ class IDS_PDF(FPDF):
         pass
 
 def generate_pdf(raw_data, selected_site, selected_district):
-    # Use Helvetica as it's standard and safe
     pdf = IDS_PDF(orientation='L', unit='mm', format='A4')
     pdf.set_auto_page_break(auto=True, margin=15)
     
@@ -19,62 +18,79 @@ def generate_pdf(raw_data, selected_site, selected_district):
         pdf.add_page()
         group_df = raw_data[raw_data['GROUP'] == group]
         
-        # --- HEADER SECTION ---
+        # --- LOGO & HEADER ---
+        try:
+            pdf.image("oaf_logo.png", x=10, y=8, w=25) # Assumes logo is in your GitHub repo
+        except:
+            pass # App won't crash if logo is missing
+            
         pdf.set_font("Helvetica", 'B', 14)
-        pdf.cell(0, 10, f"Main_ID_SR: {selected_site} - Group {group}", ln=True, align='C')
+        pdf.set_x(40)
+        pdf.cell(0, 10, f"Main_ID_SR: {selected_site} - Group {group}", ln=True)
         
-        pdf.set_font("Helvetica", '', 10)
-        pdf.cell(100, 6, f"District: {selected_district}", ln=False)
-        pdf.cell(0, 6, f"Site: {selected_site}", ln=True, align='R')
-        pdf.cell(0, 6, f"Print Date: {pd.Timestamp.now().strftime('%Y-%m-%d')}", ln=True, align='R')
-        pdf.ln(5)
+        pdf.set_font("Helvetica", '', 9)
+        pdf.set_x(40)
+        pdf.cell(100, 5, f"District: {selected_district} | Site: {selected_site}", ln=True)
+        pdf.set_x(40)
+        pdf.cell(0, 5, f"Print Date: {pd.Timestamp.now().strftime('%d %b %Y')}", ln=True)
+        pdf.ln(15) # Space for the rotated headers
         
         # --- TABLE LOGIC ---
         pivot = group_df.pivot_table(index=['ACCOUNT', 'CLIENT'], columns='SHORTNAME', values='QUANTITY', aggfunc='sum').fillna(0)
         products = list(pivot.columns)
         
-        # Calculate Widths: Account (25), Name (50), Signature (35) = 110mm used
-        # A4 Landscape is 297mm. Available for products = ~170mm
-        prod_col_width = max(12, 170 / len(products)) if products else 15
+        # Fixed Widths
+        acc_w = 22
+        name_w = 48
+        sig_w = 35
+        prod_w = 12 # Uniform size for all product columns
         
-        # Header Row
-        pdf.set_fill_color(200, 200, 200) # Light Grey for header
-        pdf.set_font("Helvetica", 'B', 8)
-        pdf.cell(25, 10, "Account", border=1, fill=True)
-        pdf.cell(55, 10, "Farmer Name", border=1, fill=True)
+        # --- ROTATED HEADERS ---
+        pdf.set_font("Helvetica", 'B', 7)
+        pdf.cell(acc_w, 20, "Account", border=1, align='C')
+        pdf.cell(name_w, 20, "Farmer Name", border=1, align='C')
+        
+        # Capture current position to draw rotated headers
+        start_x = pdf.get_x()
+        start_y = pdf.get_y()
+        
         for prod in products:
-            # We rotate or truncate long names
-            pdf.cell(prod_col_width, 10, prod[:10], border=1, fill=True, align='C')
-        pdf.cell(35, 10, "Signature", border=1, fill=True)
-        pdf.ln()
+            # Draw the box first
+            pdf.rect(pdf.get_x(), start_y, prod_w, 20)
+            # Rotate and write text
+            with pdf.rotation(90, x=pdf.get_x() + (prod_w/2), y=start_y + 10):
+                pdf.text(pdf.get_x() + 2, start_y + 18, prod[:15]) 
+            pdf.set_x(pdf.get_x() + prod_w)
+            
+        pdf.cell(sig_w, 20, "Farmer Signature", border=1, align='C', ln=True)
         
-        # Data Rows
+        # --- DATA ROWS ---
         pdf.set_font("Helvetica", '', 8)
         for idx, row in pivot.iterrows():
-            # Farmer Info
-            pdf.cell(25, 8, str(idx[0]), border=1)
-            pdf.cell(55, 8, str(idx[1]), border=1)
+            current_y = pdf.get_y()
             
-            # Product 1s
+            # 1. Main Data Row
+            pdf.cell(acc_w, 7, str(idx[0]), border='LR') # Left/Right border only
+            pdf.cell(name_w, 7, str(idx[1]), border='LR')
             for prod in products:
                 val = '1' if row[prod] > 0 else ''
-                pdf.cell(prod_col_width, 8, val, border=1, align='C')
+                pdf.cell(prod_w, 7, val, border=1, align='C')
             
-            pdf.cell(35, 8, "", border=1) # Signature Box
+            # Draw the SINGLE Signature Box (Heights of both rows combined: 7 + 6 = 13)
+            pdf.rect(pdf.get_x(), current_y, sig_w, 13) 
+            pdf.set_x(pdf.get_x() + sig_w)
             pdf.ln()
             
-            # THE CLEANUP: Adjustment Row with light styling
-            pdf.set_fill_color(245, 245, 245) # Very light grey
-            pdf.set_text_color(100, 100, 100) # Grey text
-            pdf.cell(25, 6, "", border=1, fill=True)
-            pdf.cell(55, 6, "  + Delivery Adjustment", border=1, fill=True)
+            # 2. Adjustment Row (Zebra Stripe)
+            pdf.set_fill_color(245, 245, 245)
+            pdf.set_text_color(120, 120, 120)
+            pdf.cell(acc_w, 6, "", border='LRB', fill=True) # Bottom border added
+            pdf.cell(name_w, 6, "  + Adjustment", border='LRB', fill=True)
             for _ in products:
-                pdf.cell(prod_col_width, 6, "", border=1, fill=True)
-            pdf.cell(35, 6, "", border=1, fill=True)
-            pdf.ln()
+                pdf.cell(prod_w, 6, "", border=1, fill=True)
             
-            # Reset colors for next farmer
-            pdf.set_text_color(0, 0, 0)
+            pdf.ln()
+            pdf.set_text_color(0, 0, 0) # Reset black
 
     return bytes(pdf.output())
 

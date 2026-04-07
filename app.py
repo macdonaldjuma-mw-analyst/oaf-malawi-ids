@@ -93,11 +93,15 @@ def generate_pdf(raw_data, selected_site, selected_district, del_date, del_tms):
     pdf = IDS_PDF(orientation='L', unit='mm', format='A4')
     pdf.set_auto_page_break(auto=True, margin=15)
 
+    # Add the TMS summary page first
     generate_tms_page(pdf, raw_data, selected_site, selected_district, del_date, del_tms)
     
-    # 1. Page Settings & Map
-    acc_w, name_w, base_prod_w, sig_w = 22, 48, 12, 35
+    # 1. Page Settings
+    # Static widths for non-product columns
+    acc_w, name_w, sig_w = 22, 48, 35
     col_map = {'acc': 10, 'name': 32, 'prod_start': 80}
+    # Max available width for the product section is ~182mm (to reach the right margin)
+    max_prod_container_w = 182 
 
     for group in raw_data['GROUP'].unique():
         pdf.add_page()
@@ -106,13 +110,19 @@ def generate_pdf(raw_data, selected_site, selected_district, del_date, del_tms):
         products = list(pivot.columns)
         num_prods = len(products)
 
-        # --- DYNAMIC SCALING LOGIC ---
-        # If products > 12, shrink width to 9. If > 16, shrink to 7.
-        current_prod_w = base_prod_w
-        if num_prods > 12: current_prod_w = 9
-        if num_prods > 16: current_prod_w = 7
+        # --- SMART DYNAMIC SCALING ---
+        # If products are few, use standard 12mm. 
+        # If there are many, calculate exactly how much width each gets to fill the page.
+        if (num_prods * 12) <= max_prod_container_w:
+            current_prod_w = 12
+        else:
+            current_prod_w = max_prod_container_w / num_prods
         
-        # Recalculate where the Signature box starts so it doesn't fall off
+        # Determine font size for headers based on space
+        header_font_size = 8 if current_prod_w > 10 else 7
+        if current_prod_w < 7: header_font_size = 6
+        
+        # Signature box starts exactly where the products end
         sig_x = col_map['prod_start'] + (num_prods * current_prod_w)
 
         # --- DYNAMIC HEADER HEIGHT ---
@@ -134,21 +144,24 @@ def generate_pdf(raw_data, selected_site, selected_district, del_date, del_tms):
         
         # --- TABLE HEADER ---
         pdf.set_y(28)
-        pdf.set_font("Helvetica", 'B', 8 if num_prods <= 12 else 7)
+        pdf.set_font("Helvetica", 'B', 8)
         
         pdf.set_xy(col_map['acc'], 28)
         pdf.cell(acc_w, h_height, "Account", border=1, align='C')
         pdf.cell(name_w, h_height, "Farmer Name", border=1, align='C')
         
-        # Product Headers using current_prod_w
+        # Product Headers with Restored Buffer
+        pdf.set_font("Helvetica", 'B', header_font_size)
         for i, prod in enumerate(products):
             x_pos = col_map['prod_start'] + (i * current_prod_w)
             pdf.rect(x_pos, 28, current_prod_w, h_height)
             
+            # The rotation pivot is placed to keep text centered and lifted 3mm from the line
             with pdf.rotation(90, x=x_pos + (current_prod_w/2), y=28 + h_height - 3):
-                pdf.text(x_pos + (current_prod_w/4), 28 + h_height - 2, str(prod))
+                pdf.text(x_pos + (current_prod_w/2) - 1, 28 + h_height - 3, str(prod))
         
-        # Signature Header using sig_x
+        # Signature Header
+        pdf.set_font("Helvetica", 'B', 8)
         pdf.set_xy(sig_x, 28)
         pdf.cell(sig_w, h_height, "Farmer Signature", border=1, align='C')
         pdf.ln(h_height)
@@ -156,24 +169,25 @@ def generate_pdf(raw_data, selected_site, selected_district, del_date, del_tms):
         # --- DATA ROWS ---
         pdf.set_font("Helvetica", '', 8)
         for idx, row in pivot.iterrows():
-            if pdf.get_y() > 185: pdf.add_page()
+            if pdf.get_y() > 180: pdf.add_page()
             y_s = pdf.get_y()
             
+            # Left side
             pdf.set_xy(col_map['acc'], y_s)
             pdf.cell(acc_w, 7, str(idx[0]), border='LR')
             pdf.cell(name_w, 7, str(idx[1]), border='LR')
             
-            # Product 1s using current_prod_w
+            # Products
             for i, p in enumerate(products):
                 pdf.set_xy(col_map['prod_start'] + (i * current_prod_w), y_s)
                 val = '1' if row[p] > 0 else ''
                 pdf.cell(current_prod_w, 7, val, border=1, align='C')
             
-            # Merged Sig Box using sig_x
+            # Signature Box
             pdf.set_xy(sig_x, y_s)
             pdf.cell(sig_w, 13, "", border=1)
             
-            # Adjustment Row using current_prod_w
+            # Adjustment Row
             pdf.set_xy(col_map['acc'], y_s + 7)
             pdf.set_fill_color(245, 245, 245)
             pdf.set_text_color(120, 120, 120)
@@ -186,7 +200,7 @@ def generate_pdf(raw_data, selected_site, selected_district, del_date, del_tms):
             pdf.set_text_color(0, 0, 0)
             pdf.set_xy(col_map['acc'], y_s + 13)
 
-        # --- 1. GRAND TOTAL ROW ---
+        # --- TOTALS ROW ---
         pdf.set_fill_color(200, 200, 200)
         pdf.set_font("Helvetica", 'B', 8)
         pdf.cell(acc_w + name_w, 8, "GROUP TOTALS", border=1, fill=True, align='R')
@@ -209,7 +223,7 @@ def generate_pdf(raw_data, selected_site, selected_district, del_date, del_tms):
                         
         pdf.ln(15)
         
-        # --- 2. OFFICIAL SIGNATURE SLOTS ---
+        # --- OFFICIAL SIGNATURE SLOTS ---
         pdf.set_font("Helvetica", 'B', 10)
         pdf.cell(90, 10, "Group Leader Signature: ________________________", ln=0)
         pdf.cell(40, 10, "Date: ____/____/____", ln=1)

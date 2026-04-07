@@ -190,7 +190,8 @@ if selected_district:
             # 5. Final Download Button
             st.divider()
             if st.button(f"Download IDS PDF"):
-                pdf_bytes = generate_pdf(raw_data, selected_site, selected_district)
+                # Pass the new date and TMS variables from your sidebar here:
+                pdf_bytes = generate_pdf(raw_data, selected_site, selected_district, delivery_date, delivery_tms)
                 st.download_button(
                     label="Click here to save PDF",
                     data=pdf_bytes,

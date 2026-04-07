@@ -9,6 +9,7 @@ class IDS_PDF(FPDF):
         pass
 
 def generate_pdf(raw_data, selected_site, selected_district):
+    # Use Helvetica as it's standard and safe
     pdf = IDS_PDF(orientation='L', unit='mm', format='A4')
     pdf.set_auto_page_break(auto=True, margin=15)
     
@@ -19,48 +20,61 @@ def generate_pdf(raw_data, selected_site, selected_district):
         group_df = raw_data[raw_data['GROUP'] == group]
         
         # --- HEADER SECTION ---
-        pdf.set_font("Helvetica", 'B', 12)
-        pdf.cell(0, 8, f"Delivery: {selected_site} {group}", ln=True)
+        pdf.set_font("Helvetica", 'B', 14)
+        pdf.cell(0, 10, f"Main_ID_SR: {selected_site} - Group {group}", ln=True, align='C')
+        
         pdf.set_font("Helvetica", '', 10)
-        pdf.cell(0, 6, f"{selected_site}, {selected_district}", ln=True)
-        pdf.cell(0, 6, f"Delivery Date: ________________", ln=True)
+        pdf.cell(100, 6, f"District: {selected_district}", ln=False)
+        pdf.cell(0, 6, f"Site: {selected_site}", ln=True, align='R')
+        pdf.cell(0, 6, f"Print Date: {pd.Timestamp.now().strftime('%Y-%m-%d')}", ln=True, align='R')
         pdf.ln(5)
         
-        # --- DATA TABLE ---
-        # Get dynamic products for this group
+        # --- TABLE LOGIC ---
         pivot = group_df.pivot_table(index=['ACCOUNT', 'CLIENT'], columns='SHORTNAME', values='QUANTITY', aggfunc='sum').fillna(0)
-        columns = list(pivot.columns)
+        products = list(pivot.columns)
         
-        # Table Header
-        pdf.set_font("Helvetica", 'B', 7)
-        pdf.cell(20, 10, "Account Number", border=1)
-        pdf.cell(45, 10, "Farmer Name", border=1)
-        for col in columns:
-            pdf.cell(15, 10, col[:8], border=1) # Truncate long names
-        pdf.cell(35, 10, "Farmer Signature", border=1)
+        # Calculate Widths: Account (25), Name (50), Signature (35) = 110mm used
+        # A4 Landscape is 297mm. Available for products = ~170mm
+        prod_col_width = max(12, 170 / len(products)) if products else 15
+        
+        # Header Row
+        pdf.set_fill_color(200, 200, 200) # Light Grey for header
+        pdf.set_font("Helvetica", 'B', 8)
+        pdf.cell(25, 10, "Account", border=1, fill=True)
+        pdf.cell(55, 10, "Farmer Name", border=1, fill=True)
+        for prod in products:
+            # We rotate or truncate long names
+            pdf.cell(prod_col_width, 10, prod[:10], border=1, fill=True, align='C')
+        pdf.cell(35, 10, "Signature", border=1, fill=True)
         pdf.ln()
         
-        # Table Rows
-        pdf.set_font("Arial", '', 7)
+        # Data Rows
+        pdf.set_font("Helvetica", '', 8)
         for idx, row in pivot.iterrows():
-            # Data Row
-            pdf.cell(20, 8, str(idx[0]), border=1)
-            pdf.cell(45, 8, str(idx[1]), border=1)
-            for col in columns:
-                val = '1' if row[col] > 0 else ''
-                pdf.cell(15, 8, val, border=1, align='C')
-            pdf.cell(35, 8, "", border=1)
+            # Farmer Info
+            pdf.cell(25, 8, str(idx[0]), border=1)
+            pdf.cell(55, 8, str(idx[1]), border=1)
+            
+            # Product 1s
+            for prod in products:
+                val = '1' if row[prod] > 0 else ''
+                pdf.cell(prod_col_width, 8, val, border=1, align='C')
+            
+            pdf.cell(35, 8, "", border=1) # Signature Box
             pdf.ln()
             
-            # Adjustment Row
-            pdf.set_text_color(150, 150, 150) # Grey color
-            pdf.cell(20, 6, "", border=1)
-            pdf.cell(45, 6, "  Delivery Adjustment", border=1)
-            for col in columns:
-                pdf.cell(15, 6, "", border=1)
-            pdf.cell(35, 6, "", border=1)
+            # THE CLEANUP: Adjustment Row with light styling
+            pdf.set_fill_color(245, 245, 245) # Very light grey
+            pdf.set_text_color(100, 100, 100) # Grey text
+            pdf.cell(25, 6, "", border=1, fill=True)
+            pdf.cell(55, 6, "  + Delivery Adjustment", border=1, fill=True)
+            for _ in products:
+                pdf.cell(prod_col_width, 6, "", border=1, fill=True)
+            pdf.cell(35, 6, "", border=1, fill=True)
             pdf.ln()
-            pdf.set_text_color(0, 0, 0) # Reset to black
+            
+            # Reset colors for next farmer
+            pdf.set_text_color(0, 0, 0)
 
     return bytes(pdf.output())
 

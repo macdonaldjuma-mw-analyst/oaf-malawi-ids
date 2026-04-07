@@ -2,3 +2,4 @@ streamlit
 snowflake-connector-python
 snowflake-sqlalchemy
 pandas
+fpdf2

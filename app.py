@@ -104,15 +104,30 @@ def generate_pdf(raw_data, selected_site, selected_district, del_date, del_tms):
         # --- 1. GRAND TOTAL ROW ---
         pdf.set_fill_color(200, 200, 200) # Darker grey
         pdf.set_font("Helvetica", 'B', 8)
-        pdf.cell(acc_w + name_w, 8, "SITE TOTALS", border=1, fill=True, align='R')
+        pdf.cell(acc_w + name_w, 8, "GROUP TOTALS", border=1, fill=True, align='R')
         
         for prod in products:
             total_qty = (pivot[prod] > 0).sum() # Counts how many '1s' are in the column
             pdf.cell(prod_w, 8, str(int(total_qty)), border=1, fill=True, align='C')
         
         pdf.cell(sig_w, 8, "", border=1, fill=True)
+        # --- ADDED: NEW TOTAL / ADJUSTMENT ROW ---
+        pdf.ln(8) # Move cursor to the next line (matching the height of the previous row)
+        pdf.set_xy(col_map['acc'], pdf.get_y()) # Reset to left margin
+        
+        # Label for the adjustment row
+        pdf.set_font("Helvetica", 'B', 8)
+        pdf.cell(acc_w + name_w, 8, "NEW TOTAL (After Adj.)", border=1, align='R')
+        
+        # Create blank white boxes for the FO to write in
+        for prod in products:
+            pdf.cell(prod_w, 8, "", border=1, align='C')
+            
+        # Blank box under the signature column
+        pdf.cell(sig_w, 8, "", border=1)
+                       
         pdf.ln(15)
-    
+        
         # --- 2. OFFICIAL SIGNATURE SLOTS ---
         pdf.set_font("Helvetica", 'B', 10)
         # Group Leader Slot

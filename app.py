@@ -62,7 +62,7 @@ def generate_pdf(raw_data, selected_site, selected_district):
             pdf.ln()
             pdf.set_text_color(0, 0, 0) # Reset to black
 
-   return bytes(pdf.output())
+return bytes(pdf.output())
 
 # 1. Establish Snowflake Connection
 conn = st.connection("snowflake")

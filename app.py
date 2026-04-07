@@ -59,13 +59,18 @@ def generate_pdf(raw_data, selected_site, selected_district):
         pdf.cell(acc_w, 20, "Account", border=1, align='C')
         pdf.cell(name_w, 20, "Farmer Name", border=1, align='C')
         
-        # Draw Rotated Product Headers
+        # --- ROTATED HEADERS ---
         for i, prod in enumerate(products):
+            # Calculate the exact left edge of this specific column
             x_pos = col_map['prod_start'] + (i * prod_w)
+            
+            # 1. Draw the Box
             pdf.rect(x_pos, 32, prod_w, 20)
-            # Center the text rotation in the middle of the 12mm cell
-            with pdf.rotation(90, x=x_pos + (prod_w/2), y=42):
-                pdf.text(x_pos + 2, 50, prod[:15]) # Vertical text
+        
+            # 2. Draw the Text (The Pivot must be at x_pos + half the width)
+            # We use x_pos + 6 (half of 12) to put the text in the dead center
+            with pdf.rotation(90, x=x_pos + 6, y=42):
+                pdf.text(x_pos + 2, 50, prod[:15])
         
         # Draw Signature Header (End of products)
         sig_x = col_map['prod_start'] + (len(products) * prod_w)

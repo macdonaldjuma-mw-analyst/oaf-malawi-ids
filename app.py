@@ -34,7 +34,7 @@ def generate_pdf(raw_data, selected_site, selected_district):
         
         # --- LOGO & HEADER ---
         try:
-            pdf.image("oaf_logo.png", x=10, y=8, w=25)
+            pdf.image("oaf_logo.png", x=262, y=8, w=25)
         except:
             pass # Skips if logo is not in GitHub repo
             

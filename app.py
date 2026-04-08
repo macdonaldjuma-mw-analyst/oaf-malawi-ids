@@ -72,21 +72,27 @@ def generate_tms_page(pdf, raw_data, site, district, date, tms_no):
         pdf.cell(70, tms_row_height, "", border=1, ln=True)
 
 def generate_kobo_csv(raw_data):
-    # Pivot the data so each farmer is one row with all their products
-    kobo_pivot = raw_data.pivot_table(
-        index=['DISTRICT','SITE','GROUP', 'ACCOUNT', 'CLIENT'], 
+    # Create a copy to avoid modifying the original data
+    temp_df = raw_data.copy()
+    
+    # Safety: Force all column names to uppercase to match our logic
+    temp_df.columns = [c.upper() for c in temp_df.columns]
+    
+    # Columns we need for the Kobo Prefill
+    idx_cols = ['DISTRICT', 'SITE', 'GROUP', 'ACCOUNT', 'CLIENT']
+    
+    # Pivot the data
+    kobo_pivot = temp_df.pivot_table(
+        index=idx_cols,
         columns='SHORTNAME', 
         values='QUANTITY', 
         aggfunc='sum'
     ).fillna(0)
     
-    # Convert quantities to 1/0 for easy Kobo checkboxes
-    kobo_pivot = kobo_pivot.map(lambda x: 1 if x > 0 else 0)
-    
-    # Flatten index so it's a clean CSV
+    # Flatten index so it's a clean CSV for Kobo
     kobo_csv = kobo_pivot.reset_index()
     
-    # Convert to CSV string
+    # Convert to CSV string (Actual quantities, not just 1s, for better FO accuracy)
     return kobo_csv.to_csv(index=False)
 
 def generate_pdf(raw_data, selected_site, selected_district, del_date, del_tms):

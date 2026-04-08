@@ -255,7 +255,7 @@ def get_filter_data(query):
     return conn.query(query)
 
 # --- DISTRICT FILTER (Mandatory) ---
-dist_query = "SELECT DISTINCT DISTRICT FROM DEVELOPMENT.SEASON_CLIENTS_LR25.WINTER_INPUT_DELIVERY_TABLEORDER BY DISTRICT"
+dist_query = "SELECT DISTINCT DISTRICT FROM DEVELOPMENT.SEASON_CLIENTS_LR25.WINTER_INPUT_DELIVERY_TABLE ORDER BY DISTRICT"
 districts = get_filter_data(dist_query)
 selected_district = st.sidebar.selectbox("1. Select District", districts, index=None, placeholder="Choose District...")
 

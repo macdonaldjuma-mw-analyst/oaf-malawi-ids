@@ -247,7 +247,13 @@ st.title("OAF Malawi: IDS Generator")
 # 2. Sidebar Filters (Cascading Logic)
 st.sidebar.header("Delivery Filters")
 delivery_date = st.sidebar.date_input("Select Delivery Date")
-delivery_tms = st.sidebar.text_input("Enter Delivery TMS", value="TMS-001")
+delivery_tms = st.sidebar.number_input(
+    "Enter Delivery TMS", 
+    min_value=0, 
+    value=0000, 
+    step=1,
+    help="Enter the numeric TMS code for this delivery."
+)
 
 # Helper function to get unique values for filters
 @st.cache_data

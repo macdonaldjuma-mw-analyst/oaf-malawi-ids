@@ -255,19 +255,19 @@ def get_filter_data(query):
     return conn.query(query)
 
 # --- DISTRICT FILTER (Mandatory) ---
-dist_query = "SELECT DISTINCT DISTRICT FROM DEVELOPMENT.SEASON_CLIENTS_LR25.INPUT_DELIVERY_TABLE ORDER BY DISTRICT"
+dist_query = "SELECT DISTINCT DISTRICT FROM DEVELOPMENT.SEASON_CLIENTS_LR25.WINTER_INPUT_DELIVERY_TABLEORDER BY DISTRICT"
 districts = get_filter_data(dist_query)
 selected_district = st.sidebar.selectbox("1. Select District", districts, index=None, placeholder="Choose District...")
 
 if selected_district:
     # --- SITE FILTER (Dependent on District) ---
-    site_query = f"SELECT DISTINCT SITE FROM DEVELOPMENT.SEASON_CLIENTS_LR25.INPUT_DELIVERY_TABLE WHERE DISTRICT = '{selected_district}' ORDER BY SITE"
+    site_query = f"SELECT DISTINCT SITE FROM DEVELOPMENT.SEASON_CLIENTS_LR25.WINTER_INPUT_DELIVERY_TABLE WHERE DISTRICT = '{selected_district}' ORDER BY SITE"
     sites = get_filter_data(site_query)
     selected_site = st.sidebar.selectbox("2. Select Site", sites, index=None, placeholder="Choose Site...")
 
     if selected_site:
         # --- GROUP FILTER (Dependent on Site + "ALL" option) ---
-        group_query = f"SELECT DISTINCT \"GROUP\" FROM DEVELOPMENT.SEASON_CLIENTS_LR25.INPUT_DELIVERY_TABLE WHERE SITE = '{selected_site}' ORDER BY \"GROUP\""
+        group_query = f"SELECT DISTINCT \"GROUP\" FROM DEVELOPMENT.SEASON_CLIENTS_LR25.WINTER_INPUT_DELIVERY_TABLE WHERE SITE = '{selected_site}' ORDER BY \"GROUP\""
         groups_raw = get_filter_data(group_query)
         group_options = ["ALL"] + list(groups_raw['GROUP'].unique())
         selected_group = st.sidebar.selectbox("3. Select Group", group_options, index=0)
@@ -277,7 +277,7 @@ if selected_district:
         
         main_query = f"""
             SELECT DISTRICT, SITE, ACCOUNT, CLIENT, \"GROUP\", SHORTNAME, QUANTITY 
-            FROM DEVELOPMENT.SEASON_CLIENTS_LR25.INPUT_DELIVERY_TABLE 
+            FROM DEVELOPMENT.SEASON_CLIENTS_LR25.WINTER_INPUT_DELIVERY_TABLE 
             WHERE SITE = '{selected_site}' 
             AND STATUS = 'Undelivered'
             {group_filter_sql}

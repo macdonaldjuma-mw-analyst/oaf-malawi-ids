@@ -276,7 +276,7 @@ if selected_district:
         group_filter_sql = "" if selected_group == "ALL" else f"AND \"GROUP\" = '{selected_group}'"
         
         main_query = f"""
-            SELECT ACCOUNT, CLIENT, \"GROUP\", SHORTNAME, QUANTITY 
+            SELECT DISTRICT, SITE, ACCOUNT, CLIENT, \"GROUP\", SHORTNAME, QUANTITY 
             FROM DEVELOPMENT.SEASON_CLIENTS_LR25.INPUT_DELIVERY_TABLE 
             WHERE SITE = '{selected_site}' 
             AND STATUS = 'Undelivered'

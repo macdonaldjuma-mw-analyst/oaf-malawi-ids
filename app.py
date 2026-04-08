@@ -74,7 +74,7 @@ def generate_tms_page(pdf, raw_data, site, district, date, tms_no):
 def generate_kobo_csv(raw_data):
     # Pivot the data so each farmer is one row with all their products
     kobo_pivot = raw_data.pivot_table(
-        index=['GROUP', 'ACCOUNT', 'CLIENT'], 
+        index=['DISTRICT','SITE','GROUP', 'ACCOUNT', 'CLIENT'], 
         columns='SHORTNAME', 
         values='QUANTITY', 
         aggfunc='sum'

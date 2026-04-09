@@ -255,7 +255,10 @@ def generate_pdf(raw_data, selected_site, selected_district, del_date, del_tms):
             # Products
             for i, p in enumerate(products):
                 pdf.set_xy(col_map['prod_start'] + (i * current_prod_w), y_s)
-                val = '1' if row[p] > 0 else ''
+                
+                # Use the actual value from the row, converted to an integer string
+                val = str(int(row[p])) if row[p] > 0 else ''
+                
                 pdf.cell(current_prod_w, 7, val, border=1, align='C')
             
             # Signature Box

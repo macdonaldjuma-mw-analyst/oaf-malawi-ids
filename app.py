@@ -284,7 +284,7 @@ def generate_pdf(raw_data, selected_site, selected_district, del_date, del_tms):
         pdf.cell(acc_w + name_w, 8, "GROUP TOTALS", border=1, fill=True, align='R')
         
         for prod in products:
-            total_qty = (pivot[prod] > 0).sum()
+            total_qty = pivot[prod].sum()
             pdf.cell(current_prod_w, 8, str(int(total_qty)), border=1, fill=True, align='C')
         
         pdf.cell(sig_w, 8, "", border=1, fill=True)

@@ -8,68 +8,137 @@ class IDS_PDF(FPDF):
         # We will handle custom headers per group in the main loop
         pass
 def generate_tms_page(pdf, raw_data, site, district, date, tms_no):
-    pdf.add_page()
-    
-    # 1. TOP SIGN-OFF GRID (The "Nuances")
-    pdf.set_font("Helvetica", 'B', 8)
-    
-    # Row 1: Warehouse Loading Section
-    pdf.set_xy(10, 10)
-    pdf.cell(40, 12, "District: " + str(district), border=1)
-    pdf.cell(40, 12, "TMS No: " + str(tms_no), border=1)
-    pdf.set_fill_color(220, 220, 220)
-    pdf.cell(40, 6, "Warehouse Loading", border=1, fill=True, align='C')
-    pdf.set_xy(90, 16) # Move below "Warehouse Loading"
-    pdf.cell(20, 6, "TM Sign", border=1)
-    pdf.cell(20, 6, "LA Sign", border=1)
-    pdf.cell(20, 6, "WA Sign", border=1)
-    
-    # Row 2: Warehouse Returns Section
-    pdf.set_xy(150, 10)
-    pdf.cell(100, 6, "Warehouse Returns / Reconciliation", border=1, fill=True, align='C', ln=True)
-    pdf.set_x(150)
-    pdf.cell(25, 6, "Truck Arrival", border=1)
-    pdf.cell(25, 6, "Truck Depart", border=1)
-    pdf.cell(25, 6, "TM Sign", border=1)
-    pdf.cell(25, 6, "FO Sign", border=1)
-    pdf.cell(25, 6, "FM Sign", border=1, ln=True)
+    # Dummy variables for now - can be connected to Streamlit inputs later
+    warehouse_val = "Maone"
+    weight_val = "23,092"
+    truck_plate = "________________" 
 
-    # 2. ADDITIONAL ROLES (FM, WA)
-    pdf.set_xy(10, 22)
-    pdf.cell(40, 10, "Truck Plate: ________", border=1)
-    pdf.cell(40, 10, "Warehouse: ________", border=1)
-    pdf.cell(20, 10, "FM Sign", border=1)
-    pdf.cell(20, 10, "WA Sign", border=1)
+    pdf.add_page()
+    pdf.set_font("Helvetica", 'B', 8)
+    pdf.set_fill_color(230, 230, 230)
     
-    # 3. DYNAMIC TABLE SCALING
+    # --- 1. TOP MODULES (The 4 Header Boxes) ---
+    std_h = 7       
+    label_w = 10    
+    sign_w = 10     
+    space_w = 22    
+
+    # BOX 1: Metadata (X: 10, Total Width: 55)
+    pdf.set_xy(10, 10)
+    pdf.cell(55, std_h, "Metadata", border=1, fill=True, align='C')
+    meta_data = [
+        ("District", district), ("TMS #", tms_no), ("Date", date), 
+        ("Warehouse", warehouse_val), ("Weight (Kgs)", weight_val), ("Truck Plate #", truck_plate)
+    ]
+    for i, (label, val) in enumerate(meta_data):
+        pdf.set_xy(10, 17 + (i * std_h))
+        pdf.cell(25, std_h, label, border=1)
+        pdf.cell(30, std_h, str(val), border=1)
+
+    # BOX 2: Warehouse Loading (X: 70, Total Width: 64)
+    x_off2 = 70
+    pdf.set_xy(x_off2, 10)
+    pdf.cell(64, std_h, "Warehouse Loading", border=1, fill=True, align='C')
+    roles2 = ["TM", "LA", "WA"]
+    for i, role in enumerate(roles2):
+        pdf.set_xy(x_off2, 17 + (i * std_h))
+        pdf.cell(label_w, std_h, role, border=1, align='C')
+        pdf.cell(space_w, std_h, "", border=1)
+        pdf.cell(sign_w, std_h, "sign", border=1, align='C')
+        pdf.cell(space_w, std_h, "", border=1)
+
+    # BOX 3: On Site (X: 140, Total Width: 90)
+    x_off3 = 140
+    pdf.set_xy(x_off3, 10)
+    pdf.cell(90, std_h, f"On Site: {site}", border=1, fill=True, align='C')
+    pdf.set_xy(x_off3, 17)
+    pdf.cell(45, std_h, "Truck Arrival", border=1, align='C')
+    pdf.cell(45, std_h, "Truck Departure", border=1, align='C')
+    roles3 = ["TM", "FO", "FM"]
+    for i, role in enumerate(roles3):
+        pdf.set_xy(x_off3, 24 + (i * std_h))
+        for _ in range(2): # Arrival side, then Departure side
+            pdf.cell(7, std_h, role, border=1, align='C')
+            pdf.cell(12, std_h, "", border=1)
+            pdf.cell(8, std_h, "sign", border=1, align='C')
+            pdf.cell(18, std_h, "", border=1)
+
+    # BOX 4: Warehouse Returns (X: 235, Total Width: 52)
+    x_off4 = 235
+    pdf.set_xy(x_off4, 10)
+    pdf.cell(52, std_h, "Warehouse Returns", border=1, fill=True, align='C')
+    for i, role in enumerate(roles2): # Uses TM, LA, WA
+        pdf.set_xy(x_off4, 17 + (i * std_h))
+        pdf.cell(label_w, std_h, role, border=1, align='C')
+        pdf.cell(14, std_h, "", border=1)
+        pdf.cell(sign_w, std_h, "sign", border=1, align='C')
+        pdf.cell(18, std_h, "", border=1)
+
+    # --- 2. DYNAMIC PRODUCT TABLE ---
     summary = raw_data.groupby('SHORTNAME')['QUANTITY'].sum().reset_index()
-    num_rows = len(summary)
+    num_prods = len(summary)
     
-    # If there are many rows, shrink the row height to keep it on one page
-    tms_row_height = 8
-    if num_rows > 20: tms_row_height = 6
-    if num_rows > 30: tms_row_height = 5
+    # Position table below metadata box
+    table_y = 62 
+    pdf.set_xy(10, table_y)
     
-    pdf.set_xy(10, 35)
-    pdf.set_font("Helvetica", 'B', 9)
-    pdf.set_fill_color(240, 240, 240)
+    # Column Widths (Stretched to 277mm total)
+    col_w = {
+        'name': 40, 'batch': 25, 'need1': 25, 'load': 25,
+        'need2': 25, 'unload': 25, 'reld': 25, 'ret': 35, 'notes': 52
+    }
+
+    # Scaling Logic
+    row_h, font_size = 9, 8
+    if num_prods > 12: row_h, font_size = 7, 7
+    if num_prods > 22: row_h, font_size = 5.5, 6
+
+    pdf.set_font("Helvetica", 'B', font_size)
+    headers = [
+        ("INPUT NAME", col_w['name']), ("BATCH NO", col_w['batch']),
+        ("#Needed", col_w['need1']), ("#Loaded", col_w['load']),
+        ("#Needed", col_w['need2']), ("#Unloaded", col_w['unload']), 
+        ("#Reloaded", col_w['reld']), ("#Returned", col_w['ret']), ("Notes", col_w['notes'])
+    ]
     
-    # Headers matching the original Mulombozi design
-    pdf.cell(80, 10, "Input Name", border=1, fill=True)
-    pdf.cell(25, 10, "# Needed", border=1, fill=True, align='C')
-    pdf.cell(25, 10, "# Loaded", border=1, fill=True, align='C')
-    pdf.cell(25, 10, "# Unloaded", border=1, fill=True, align='C')
-    pdf.cell(25, 10, "# Returned", border=1, fill=True, align='C')
-    pdf.cell(70, 10, "Notes", border=1, fill=True, ln=True)
-    
-    pdf.set_font("Helvetica", '', 9)
+    for txt, w in headers:
+        pdf.cell(w, 10, txt, border=1, fill=True, align='C')
+    pdf.ln()
+
+    # Draw Data Rows
+    pdf.set_font("Helvetica", '', font_size)
     for _, row in summary.iterrows():
-        pdf.cell(80, tms_row_height, str(row['SHORTNAME']), border=1)
-        pdf.cell(25, tms_row_height, str(int(row['QUANTITY'])), border=1, align='C')
-        pdf.cell(25, tms_row_height, "", border=1) # Loaded
-        pdf.cell(25, tms_row_height, "", border=1) # Unloaded
-        pdf.cell(25, tms_row_height, "", border=1) # Returned
-        pdf.cell(70, tms_row_height, "", border=1, ln=True)
+        pdf.set_x(10)
+        pdf.cell(col_w['name'], row_h, str(row['SHORTNAME']), border=1)
+        pdf.cell(col_w['batch'], row_h, "", border=1)
+        pdf.cell(col_w['need1'], row_h, str(int(row['QUANTITY'])), border=1, align='C')
+        pdf.cell(col_w['load'], row_h, "", border=1)
+        pdf.cell(col_w['need2'], row_h, str(int(row['QUANTITY'])), border=1, align='C')
+        pdf.cell(col_w['unload'], row_h, "", border=1)
+        pdf.cell(col_w['reld'], row_h, "", border=1)
+        
+        # Faded guide columns for Returned section
+        sub_w = col_w['ret'] / 4
+        pdf.set_text_color(180, 180, 180) 
+        pdf.cell(sub_w, row_h, "G", border=1, align='C')
+        pdf.cell(sub_w, row_h, "", border=1)
+        pdf.cell(sub_w, row_h, "D/O", border=1, align='C')
+        pdf.cell(sub_w, row_h, "", border=1)
+        pdf.set_text_color(0, 0, 0) 
+        
+        pdf.cell(col_w['notes'], row_h, "", border=1, ln=1)
+
+    # --- 3. DYNAMIC FOOTER SIGNATURES ---
+    y_sig = max(pdf.get_y() + 10, 185)
+    if y_sig > 200: # New page if no room
+        pdf.add_page()
+        y_sig = 20
+        
+    pdf.set_font("Helvetica", 'B', 8)
+    pdf.text(10, y_sig, "Security Guard Signature (Dispatch) ____________________________")
+    pdf.text(155, y_sig, "Warehouse Manager Signature (Dispatch) ____________________")
+    pdf.text(10, y_sig + 12, "Security Guard Signature (Returns) ____________________________")
+    pdf.text(155, y_sig + 12, "Warehouse Manager Signature (Returns) ___________________")
 
 def generate_kobo_csv(raw_data):
     # Create a copy to avoid modifying the original data

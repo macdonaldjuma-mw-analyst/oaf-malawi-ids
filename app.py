@@ -380,7 +380,7 @@ if selected_district:
                     ).fillna(0)
 
                     # Convert to POD format
-                    pod_display = pivot_df.map(lambda x: '1' if x > 0 else '')
+                    pod_display = pivot_df.applymap(lambda x: int(x) if x > 0 else '')
 
                     # Insert Adjustment Rows
                     final_rows = []
